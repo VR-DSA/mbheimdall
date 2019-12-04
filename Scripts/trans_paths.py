@@ -5,11 +5,11 @@
 #
 
 def getControlDir():
-  return "/home/vikram/usr/heimdall/control"
+  return "/home/gcchen/usr/mbheimdall/control"
 
 def getConfigDir():
-  return "/home/vikram/usr/heimdall/share"
+  return "/home/gcchen/usr/mbheimdall/share"
 
 def getBinaryDir():
-  return "/home/vikram/usr/heimdall/bin"
+  return "/home/gcchen/usr/mbheimdall/bin"
 

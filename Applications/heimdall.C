@@ -111,6 +111,10 @@ int main(int argc, char* argv[])
 
   float tsamp = data_source->get_tsamp() / 1000000;
   size_t stride = data_source->get_stride();
+  cout << stride << endl;
+  params.beam_count = 10; 
+  cout << params.beam_count << endl;
+  cout << params.nchans << endl;
   size_t nbits  = data_source->get_nbit();
 
   params.nchans = data_source->get_nchan();

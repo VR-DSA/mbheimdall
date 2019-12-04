@@ -38,4 +38,4 @@ dlopen=''
 dlpreopen=''
 
 # Directory that this library needs to be installed in:
-libdir='/mnt/nfs/code/dsaX_future/DSA-10/dsaX_dsa5/heimdall/lib'
+libdir='/home/gcchen/usr/mbheimdall/lib'
