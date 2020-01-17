@@ -199,16 +199,27 @@ int main(int argc, char* argv[])
 
     total_nsamps += nsamps_processed;
     // Now we must 'rewind' to do samples that couldn't be processed
-    // Note: This assumes nsamps_gulp > 2*overlap
     std::copy(&filterbank[nsamps_processed * stride * nsnap],
               &filterbank[(nsamps_read+overlap) * stride * nsnap],
-              &filterbank[0]);
-    overlap += nsamps_read - nsamps_processed;
-    nsamps_read = data_source->get_data((nsamps_gulp - overlap)*nsnap,
-                                        (char*)&filterbank[overlap*stride*nsnap]);
+              &filterbank[0]); // move the tail of the block to the beginning of the same filterband? 
+    //overlap += nsamps_read - nsamps_processed;
+    //nsamps_read = data_source->get_data((nsamps_gulp - overlap)*nsnap,
+    //                                     (char*)&filterbank[overlap*stride*nsnap]);
+    
+    for (int i = 0; i < params.nbeams; i++){ 
+      std::copy(&filterbank[(i + 1) * nsamps_processed * stride * nsnap],
+                &filterbank[(i + 1) * (nsamps_read+overlap) * stride * nsnap],
+                &filterbank[i * nsamps_gulp * stride * nsnap]);// or [i * (nsamps_read+overlap) * stride * nsnap])?  
+      
+      if (i == 0){
+      overlap += nsamps_read - nsamps_processed;
+      } 
+      nsamps_read = data_source->get_data((nsamps_gulp - overlap)*nsnap,
+                                        (char*)&filterbank[(overlap + i * nsamps_gulp) * stride * nsnap]);
+    }
 
     // at the end of data, never execute the pipeline
-    if (nsamps_read < (nsamps_gulp - overlap)*nsnap)
+    if (nsamps_read < (nsamps_gulp - overlap)*nsnap) // why < ? not > ? 
       stop_requested = 1;
   }
  

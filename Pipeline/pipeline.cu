@@ -59,6 +59,8 @@ using thrust::device_vector;
 
 #include <dedisp.h>
 
+/* This part deals with writing .fil files */
+
 FILE *output;
 
 void tfunc(std::vector<hd_byte> &vec) {
@@ -121,6 +123,8 @@ void send_coords(double raj, double dej, double az, double za) /*includefile*/
   if ((az != 0.0)  || (az != -1.0))  send_double("az_start",az);
   if ((za != 0.0)  || (za != -1.0))  send_double("za_start",za);
 }
+
+/* end of .fil file stuff */
 
 #define HD_BENCHMARK
 
@@ -306,7 +310,8 @@ hd_error hd_execute(hd_pipeline pl,
   start_timer(total_timer);
 
   start_timer(clean_timer);
-  // Note: Filterbank cleaning must be done out-of-place
+
+  // Simply copy input filterbank to clean filterbank - no RFI rejection. 
   hd_size nbytes = nsamps * pl->params.nchans * nbits / 8;
   start_timer(memory_timer);
   pl->h_clean_filterbank.resize(nbytes);
@@ -373,7 +378,7 @@ hd_error hd_execute(hd_pipeline pl,
     cout << endl;
   }
   
-  // Set channel killmask for dedispersion
+  // Set channel killmask for dedispersion (meaning ignore those channels)
   dedisp_set_killmask(pl->dedispersion_plan, &h_killmask[0]);
   
   hd_size nsamps_computed  = nsamps - dedisp_get_max_delay(pl->dedispersion_plan);
@@ -414,6 +419,7 @@ hd_error hd_execute(hd_pipeline pl,
   thrust::device_vector<hd_size>  d_giant_filter_inds;
   thrust::device_vector<hd_size>  d_giant_dm_inds;
   thrust::device_vector<hd_size>  d_giant_members;
+  thrust::device_vector<hd_size>  d_giant_beam;
   
   typedef thrust::device_ptr<hd_float> dev_float_ptr;
   typedef thrust::device_ptr<hd_size>  dev_size_ptr;
@@ -433,6 +439,7 @@ hd_error hd_execute(hd_pipeline pl,
   dedisp_size        out_stride = series_stride * out_nbits/8;
   unsigned           flags = 0;
   start_timer(dedisp_timer);
+  // average over each frequency and dedisperse. 
   derror = dedisp_execute_adv(pl->dedispersion_plan, nsamps,
                               in, in_nbits, in_stride,
                               out, out_nbits, out_stride,
@@ -597,8 +604,15 @@ hd_error hd_execute(hd_pipeline pl,
                         thrust::multiplies<hd_float>());
 
       
-
+      
       hd_size prev_giant_count = d_giant_peaks.size();
+
+      // remove the overlapped data from filtered_series before giant_finder.exec() 
+      for (int i = params.nbeams; i >0; i--){ 
+        vector::erase filtered_series[i * nsamps_gulp, i * (nsamps_gulp + overlaps)]
+
+      }
+      
 
       start_timer(giants_timer);
 
@@ -623,6 +637,8 @@ hd_error hd_execute(hd_pipeline pl,
       hd_size rel_cur_filtered_offset = (cur_filtered_offset /
 					 rel_tscrunch_width);
 
+      //cout << "rel_tscrunch_width: " << rel_tscrunch_width << endl; // got either 1 or 2.  Printed > 100 times. 
+
       using namespace thrust::placeholders;
       thrust::transform(d_giant_inds.begin()+prev_giant_count,
 			d_giant_inds.end(),
@@ -641,26 +657,27 @@ hd_error hd_execute(hd_pipeline pl,
       d_giant_dm_inds.resize(d_giant_peaks.size(), dm_idx);
       // Note: This could be used to track total member samples if desired
       d_giant_members.resize(d_giant_peaks.size(), 1);
+      d_giant_beam.resize(d_giant_peaks.size(), 1);
 
       stop_timer(giants_timer);
       
       // Bail if the candidate rate is too high
       hd_size total_giant_count = d_giant_peaks.size();
       hd_float data_length_mins = nsamps * pl->params.dt / 60.0;
-      if ( pl->params.max_giant_rate && ( total_giant_count / data_length_mins > pl->params.max_giant_rate ) ) {
-	too_many_giants = true;
-	float searched = ((float) dm_idx * 100) / (float) dm_count;
-	notrig = 1;
-	cout << "WARNING: exceeded max giants/min, DM [" << dm_list[dm_idx] << "] space searched " << searched << "%" << endl;
-	break;
-      }
+//      if ( pl->params.max_giant_rate && ( total_giant_count / data_length_mins > pl->params.max_giant_rate ) ) {
+//	too_many_giants = true;
+//	float searched = ((float) dm_idx * 100) / (float) dm_count;
+//	notrig = 1;
+//	cout << "WARNING: exceeded max giants/min, DM [" << dm_list[dm_idx] << "] space searched " << searched << "%" << endl;
+	//break;
+ //     }
 
-      if (total_timer.getTime() > 7.75) {
-	too_many_giants = true;
-	float searched = ((float) dm_idx * 100) / (float) dm_count;
-	cout << "WARNING: exceeded max giants processed in 7.75s, DM [" << dm_list[dm_idx] << "] space searched " << searched << "%" << endl;
-	break;
-      }
+ //     if (total_timer.getTime() > 7.75) {
+//	too_many_giants = true;
+//	float searched = ((float) dm_idx * 100) / (float) dm_count;
+//	cout << "WARNING: exceeded max giants processed in 7.75s, DM [" << dm_list[dm_idx] << "] space searched " << searched << "%" << endl;
+//	break;
+//      }
       
     }  
     
@@ -668,7 +685,14 @@ hd_error hd_execute(hd_pipeline pl,
 
   hd_size giant_count = d_giant_peaks.size();
   cout << "Giant count = " << giant_count << endl;
-  
+
+  // print out   
+  for (int i = 0; i < d_giant_inds.size(); i++){ // loop over the giant indices vector 
+    //giant_beam_label[i] = d_giant_inds[i] / (nsamps_gulp * pl->params.nbeams); // label the beam number of every giant 
+    fprintf(giants_out,"%d %d %d %d %d %d \n", samp_idx[i], samp_idx[i] * pl->params.dt,  d_giants.peaks[i], d_giant_dm_inds[i], d_giants.boxcar[i], d_giant_inds[i], beam_number[i])  
+      //h_group_peaks[i],samp_idx,samp_idx * pl->params.dt,h_group_filter_inds[i],h_group_dm_inds[i],h_group_dms[i],h_group_members[i],first_idx+h_group_inds[i]);
+  }
+
   start_timer(candidates_timer);
 
   thrust::host_vector<hd_float> h_group_peaks;
@@ -684,6 +708,14 @@ hd_error hd_execute(hd_pipeline pl,
   thrust::device_vector<hd_size> d_giant_labels(giant_count);
   hd_size* d_giant_labels_ptr = thrust::raw_pointer_cast(&d_giant_labels[0]);
   
+  // Use d_giant_inds to caculate beam
+  // function of pl->params.beam_count, nsamps 
+  // Process all data and remove giants found in the overlaps afterwards 
+  thrust::device_vector<hd_size>  giant_beam_label; 
+  //cout << "d_giant_inds[0] =" << d_giant_inds[0] << endl; 
+  
+
+
   RawCandidates d_giants;
   d_giants.peaks = thrust::raw_pointer_cast(&d_giant_peaks[0]);
   d_giants.inds = thrust::raw_pointer_cast(&d_giant_inds[0]);
@@ -696,7 +728,7 @@ hd_error hd_execute(hd_pipeline pl,
   hd_size filter_count = pl->params.boxcar_max;
   
   if( pl->params.verbosity >= 2 ) {
-    cout << "Grouping coincident candidates..." << endl;
+    cout << "Grouping coincident candidates..." << endl; // label_candidate_clusters 
   }
   
   hd_size label_count;

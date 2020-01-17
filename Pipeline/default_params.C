@@ -13,6 +13,8 @@ void hd_set_default_params(hd_params* params) {
 #ifdef HAVE_PSRDADA
 	params->dada_id         = 0;
 #endif
+	// Add nbeams 
+	params->nbeams          = 1; 
 	params->sigproc_file    = NULL;
 	params->yield_cpu       = false;
 	params->nsamps_gulp     = 262144;//131072; // TODO: Check that this is good

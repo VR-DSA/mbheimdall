@@ -24,6 +24,7 @@ struct RawCandidates {
 	hd_size*  filter_inds;
 	hd_size*  dm_inds;
 	hd_size*  members;
+	hd_size* beam;
 };
 struct ConstRawCandidates {
 	const hd_float* peaks;
@@ -33,6 +34,7 @@ struct ConstRawCandidates {
 	const hd_size*  filter_inds;
 	const hd_size*  dm_inds;
 	const hd_size*  members;
+	const hd_size* beam;
 };
 // Full candidate info including derived quantities
 struct Candidates : public RawCandidates {

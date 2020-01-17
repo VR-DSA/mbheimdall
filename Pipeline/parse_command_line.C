@@ -141,6 +141,9 @@ int hd_parse_command_line(int argc, char* argv[], hd_params* params)
       params->channel_zaps[izap].start = atoi(argv[++i]);
       params->channel_zaps[izap].end   = atoi(argv[++i]);
     }
+    else if( argv[i] == string("-nbeams") ) {
+      params->nbeams = atoi(argv[++i]); 
+    }
     else {
       cerr << "WARNING: Unknown parameter '" << argv[i] << "'" << endl;
     }
